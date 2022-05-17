@@ -5,7 +5,11 @@ using System.Threading.Tasks;
 using DevProjeto.API.Entities;
 using DevProjeto.API.Models;
 using DevProjeto.API.Persistence;
+using DevProjeto.API.Persistence.repository;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SendGrid;
+using SendGrid.Helpers.Mail;
 
 namespace DevProjeto.API.Controllers
 {
@@ -14,18 +18,34 @@ namespace DevProjeto.API.Controllers
 
     public class PackegesController : ControllerBase
     {
-        private readonly devProjContext _context;
-        public PackegesController(devProjContext context)
+        private readonly IPackegeRepository _repository;
+        private readonly ISendGridClient _client;
+        private ISendGridClient? client;
+
+        public PackegesController (IPackegeRepository repository, ISendGridClient client)
         {
-            _context = context;
+            if (repository is null)
+            {
+                throw new ArgumentNullException(nameof(repository));
+            }
+
+            if (client is null)
+            {
+                throw new ArgumentNullException(nameof(client));
+            }
         }
 
+        public PackegesController(IPackegeRepository repository)
+        {
+            _repository = repository;
+            _client = client ;
+        }
 
         // GET api/packeges
         [HttpGet]
         public IActionResult GetAll()
         {
-            var packeges = _context.Packeges;
+            var packeges = _repository.GetAll();
          
             return Ok(packeges);
         }
@@ -34,7 +54,7 @@ namespace DevProjeto.API.Controllers
         [HttpGet("{code}")]
         public IActionResult GetByCode(string code)
         {
-            var packege = _context.Packeges.SingleOrDefault(p => p.Code == code);
+            var packege = _repository.GetByCode(code);
             if (packege == null) {
                 return NotFound();
             }
@@ -44,27 +64,49 @@ namespace DevProjeto.API.Controllers
 
         // POST api/packeges
         [HttpPost]
-        public IActionResult Post(addPackegeInputModels models)
+        public async Task <IActionResult> Post(addPackegeInputModels models)
         {
             if (models.Title.Length < 10){
                 return BadRequest("O tamanho do titulo ultrapassa de 10 caracteres");
             }
             var packege = new Packege(models.Title, models.Weigth) ;
 
-            _context.Packeges.Add(packege);
+            _repository.Add(packege);
+            var message = new SendGridMessage{
+                From = EmailAddress("u26891485.wl236.sendgrid.net" , "CNAME" ),
+                Subject = "Seu Pacote foi enviado",
+                PlainTextContent = $"Your packege with code (packege.code) was dispached"
+
+            };
+
+            message.AddTo(models.SenderEmail , models.SenderName) ;
+            await _client.SendEmailAsync(message);
+
+      
+
             return CreatedAtAction ("GetByCode" , new { code = packege.Code}, packege ) ;
 
-        }    
-        
+        }
+
+        private EmailAddress EmailAddress(string v1, string v2)
+        {
+            throw new NotImplementedException();
+        }
+
         // POST api/packeges/code/updates
         [HttpPost("{code}/updates")]
         public IActionResult PostUpdate(string code , addPackegeUpdateInputModel models) {
-            var packege = new Packege("Pacote ", 1.2M);
+            var packege = _repository.GetByCode(code);
 
             packege.AddUpdate(models.Status,models.Delivered);
             
+            _repository.Update(packege);
             return NoContent();
 
         }
+    }
+
+    public class Text<T>
+    {
     }
 }

@@ -7,7 +7,7 @@ namespace DevProjeto.API.Models
 {
     public class addPackegeUpdateInputModel
     {
-        public string Status { get; set; }
+        public string? Status { get; set; }
         public bool Delivered { get; set; }
         
         
